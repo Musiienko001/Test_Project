@@ -1,0 +1,54 @@
+image: docker 
+  
+
+
+services:
+  - docker:dind
+
+
+stages:
+  - build
+  - deploy
+
+
+before_script:
+- 'which ssh-agent || ( apt-get install -qq openssh-client )'
+- eval $(ssh-agent -s)
+- ssh-add <(echo "$SSH_KEY")
+- mkdir -p ~/.ssh
+- '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+- apk add build-base python3-dev python3 libffi-dev libressl-dev bash git gettext curl
+- apk add py3-pip
+- pip install awscli 
+- apk add docker-cli
+
+
+
+build:
+  stage: build
+         
+  script:
+
+    - docker login -u Musiienko01 -p $Mytoken registry.gitlab.com
+    
+    - docker build -t registry.gitlab.com/admin_m1/test:latest .
+
+    
+    - docker tag registry.gitlab.com/admin_m1/test:latest 592595006036.dkr.ecr.eu-central-1.amazonaws.com/docker_repository:latest
+    
+
+
+    - aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 592595006036.dkr.ecr.eu-central-1.amazonaws.com
+
+    - docker push 592595006036.dkr.ecr.eu-central-1.amazonaws.com/docker_repository:latest
+
+  only:
+    - master
+    
+trigger_pipeline:
+
+  stage: deploy
+  script:
+    - "curl -X POST --fail -F token=$MY_TRIGGER_TOKEN -F ref=main https://gitlab.com/api/v4/projects/34876530/trigger/pipeline"
+  rules:
+    - if: $CI_COMMIT_TAG
